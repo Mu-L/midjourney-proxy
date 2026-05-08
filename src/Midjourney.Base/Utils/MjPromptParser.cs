@@ -246,8 +246,8 @@ namespace Midjourney.Base.Util
                 ShortName = "v",
                 Description = "模型版本",
                 DescriptionEn = "Midjourney model version",
-                ValueRange = "1, 2, 3, 4, 5, 5.1, 5.2, 6, 6.1, 7",
-                DefaultValue = "7",
+                ValueRange = "1, 2, 3, 4, 5, 5.1, 5.2, 6, 6.1, 7, 8.1",
+                DefaultValue = "8.1",
                 SupportedVersions = "All"
             },
             ["niji"] = new()

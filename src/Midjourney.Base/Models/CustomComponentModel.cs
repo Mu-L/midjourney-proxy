@@ -127,7 +127,13 @@ namespace Midjourney.Base.Models
             var bytton2Type = "";
             var label1 = "";
             var label2 = "";
-            if (version.StartsWith("v 7") || version.StartsWith("niji 7"))
+
+            if (version.StartsWith("v 8"))
+            {
+                // v 8 版本移除了 Upscale 高清功能
+                return null;
+            }
+            else if (version.StartsWith("v 7") || version.StartsWith("niji 7"))
             {
                 button1Type = "v7_2x_subtle";
                 bytton2Type = "v7_2x_creative";
@@ -318,10 +324,13 @@ namespace Midjourney.Base.Models
             var versionNumber = version.Split(' ').LastOrDefault()?.Trim();
             if (string.IsNullOrWhiteSpace(versionNumber)
                 || !double.TryParse(versionNumber, out double v)
-                || v < 5)
+                || v < 5
+                || v >= 8)
             {
+                // v8 版本移除了 Zoom 功能，需要在 edit 中实现缩放功能
                 return null;
             }
+
 
             return
             [
@@ -363,14 +372,19 @@ namespace Midjourney.Base.Models
         {
             // >= 5 支持
             var versionNumber = version.Split(' ').LastOrDefault()?.Trim();
-            if (string.IsNullOrWhiteSpace(versionNumber) || !double.TryParse(versionNumber, out double v) || v < 5)
+            if (string.IsNullOrWhiteSpace(versionNumber)
+                || !double.TryParse(versionNumber, out double v)
+                || v < 5
+                || v >= 8)
             {
+                // v8 版本移除了 Pan 功能，需要在 edit 中实现平移功能
                 return null;
             }
-            {
-                return
-                [
-                    new CustomComponentModel
+
+
+            return
+            [
+                new CustomComponentModel
                     {
                         CustomId = $"MJ::JOB::pan_left::1::{id}::SOLO",
                         Emoji = "⬅️",
@@ -402,8 +416,8 @@ namespace Midjourney.Base.Models
                         Style = 2,
                         Type = 2
                     }
-                ];
-            }
+            ];
+
         }
 
         /// <summary>

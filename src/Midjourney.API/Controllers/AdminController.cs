@@ -1022,6 +1022,52 @@ namespace Midjourney.API.Controllers
         }
 
         /// <summary>
+        /// 批量启用账号
+        /// </summary>
+        /// <param name="ids">账号ID列表</param>
+        /// <returns></returns>
+        [HttpPost("accounts-enable")]
+        public async Task<Result> AccountsEnable([FromBody] List<string> ids)
+        {
+            if (_isAnonymous)
+            {
+                return Result.Fail("演示模式，禁止操作");
+            }
+
+            ids = ids?
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim())
+                .Distinct()
+                .ToList();
+
+            if (ids == null || ids.Count == 0)
+            {
+                throw new LogicException("参数错误");
+            }
+
+            var accounts = _freeSql.Select<DiscordAccount>()
+                .Where(c => ids.Contains(c.Id) && c.Enable != true)
+                .ToList();
+
+            foreach (var account in accounts)
+            {
+                account.Enable = true;
+
+                _freeSql.Update<DiscordAccount>()
+                    .Set(c => c.Enable, true)
+                    .Where(c => c.Id == account.Id)
+                    .ExecuteAffrows();
+
+                account.ClearCache();
+
+                // 批量启用不需要立即启动，由后台服务自动启动即可
+                //await _discordAccountInitializer.StartAccount(account);
+            }
+
+            return Result.Ok($"已启用 {accounts.Count} 个账号");
+        }
+
+        /// <summary>
         /// 删除账号
         /// </summary>
         /// <returns></returns>

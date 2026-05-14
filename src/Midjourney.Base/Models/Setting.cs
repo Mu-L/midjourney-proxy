@@ -496,16 +496,22 @@ namespace Midjourney.Base.Models
         public bool EnableUserCustomUploadBase64 { get; set; } = true;
 
         /// <summary>
-        /// 启用转换官方链接，上传到 discord 服务器
+        /// 启用转换官方链接，上传到 discord 服务器（废弃）
         /// </summary>
         public bool EnableConvertOfficialLink { get; set; } = true;
 
         /// <summary>
-        /// 保存用户上传的 link 到文件存储（例如：describe）
+        /// 启用转换提示词中链接到云存储
+        /// </summary>
+        public bool EnableConvertPromptLinkStorage { get; set; } = false;
+
+        /// <summary>
+        /// 保存用户上传的 link 到文件存储（例如：describe）（废弃）
         /// </summary>
         public bool EnableSaveUserUploadLink { get; set; } = true;
 
         /// <summary>
+        /// 开启用户上传，默认开启（废弃）
         /// 保存用户上传的 base64 到文件存储（例如：垫图、混图等）
         /// </summary>
         public bool EnableSaveUserUploadBase64 { get; set; } = true;

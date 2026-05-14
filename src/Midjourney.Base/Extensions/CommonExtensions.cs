@@ -702,6 +702,22 @@ namespace Midjourney.Base
                     return prompt;
             }
         }
+
+        /// <summary>
+        /// 获取 prompt 中的 URL 列表
+        /// </summary>
+        /// <param name="prompt"></param>
+        /// <returns></returns>
+        public static List<string> ExtractUrls(this string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                return [];
+            }
+            var regex = @"(https?|ftp|file)://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]";
+            var matches = Regex.Matches(prompt, regex);
+            return matches.Select(c => c.Value).Distinct().ToList();
+        }
     }
 
     /// <summary>

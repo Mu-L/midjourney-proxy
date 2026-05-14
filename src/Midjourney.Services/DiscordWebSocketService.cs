@@ -3193,7 +3193,6 @@ namespace Midjourney.Services
                     // 如果启用保存过程图片
                     if (GlobalConfiguration.Setting.EnableSaveIntermediateImage && !string.IsNullOrWhiteSpace(imageUrl))
                     {
-                        //var ff = new MjImageFetchHelper();
                         var ffUrl = await MjImageFetchHelper.FetchFileToStorageAsync(imageUrl);
                         if (!string.IsNullOrWhiteSpace(ffUrl))
                         {

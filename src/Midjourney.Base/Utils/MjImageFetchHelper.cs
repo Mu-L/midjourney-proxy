@@ -24,7 +24,6 @@
 
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.IdentityModel.Logging;
 using Serilog;
 
 namespace Midjourney.Base.Util
@@ -100,6 +99,48 @@ namespace Midjourney.Base.Util
         }
 
         /// <summary>
+        /// 判断 URL 是否为官方白名单域名
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public static bool IsWhiteHost(string url)
+        {
+            var host = new Uri(url).Host;
+            return WHITE_HOSTS.Any(x => host.Contains(x, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// 判断 URL 是否为云存储加速域名/全球加速域名
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public static bool IsCdnHost(string url)
+        {
+            // 自定义加速域名
+            var cdn = StorageHelper.Instance?.GetCustomCdn();
+            if (string.IsNullOrWhiteSpace(cdn))
+            {
+                return false;
+            }
+            var host = new Uri(url).Host;
+            var cdnHost = new Uri(cdn).Host;
+            var isCdn = host.Equals(cdnHost, StringComparison.OrdinalIgnoreCase);
+
+            // 全球加速地址判断
+            if (!isCdn)
+            {
+                var storage = StorageHelper.Instance?.GetBaseStorage();
+                if (!string.IsNullOrWhiteSpace(storage?.GlobalCustomCdn))
+                {
+                    var globalCdnHost = new Uri(storage.GlobalCustomCdn).Host;
+                    isCdn = host.Equals(globalCdnHost, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return isCdn;
+        }
+
+        /// <summary>
         /// 异步获取文件
         /// 如果不在白名单的后缀，则默认为 jpg
         /// </summary>
@@ -120,10 +161,8 @@ namespace Midjourney.Base.Util
             try
             {
                 // 如果是白名单 host 则返回当前 url
-                var host = new Uri(url).Host;
-
                 // 官方域名不做转换
-                if (isWhite && WHITE_HOSTS.Any(x => host.Contains(x)))
+                if (isWhite && IsWhiteHost(url))
                 {
                     return new FetchFileResult { Success = true, Url = url, Msg = "White host" };
                 }
@@ -205,16 +244,8 @@ namespace Midjourney.Base.Util
 
             try
             {
-                var host = new Uri(url).Host;
-                var cdn = StorageHelper.Instance?.GetCustomCdn();
-                if (string.IsNullOrWhiteSpace(cdn))
-                {
-                    return null;
-                }
-                var cdnHost = new Uri(cdn).Host;
-
                 // 如果与加速链接相同，则返回
-                if (cdnHost.Equals(host, StringComparison.OrdinalIgnoreCase))
+                if (IsCdnHost(url))
                 {
                     return url;
                 }
@@ -264,13 +295,13 @@ namespace Midjourney.Base.Util
                     return res.Url;
                 }
 
-                LogHelper.LogWarning($"{url} Failed to save file to storage.");
+                Log.Warning($"{url} 保存到云存储失败");
 
                 return null;
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, $"Error fetching file: {url}");
+                Log.Warning(ex, $"抓取文件异常: {url}");
 
                 return null;
             }

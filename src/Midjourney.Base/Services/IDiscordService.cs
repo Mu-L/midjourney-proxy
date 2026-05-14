@@ -40,6 +40,6 @@ namespace Midjourney.Base.Services
         /// <param name="promptEn"></param>
         /// <param name="info"></param>
         /// <returns></returns>
-        string GetPrompt(string promptEn, TaskInfo info);
+        Task<string> GetPrompt(string promptEn, TaskInfo info);
     }
 }

@@ -2076,7 +2076,7 @@ namespace Midjourney.Services
                                     // 如果当前任务是重新执行，父级任务可能含有 --seed
                                     if (task.Action == TaskAction.IMAGINE || task.Action == TaskAction.BLEND || task.Action == TaskAction.VIDEO)
                                     {
-                                        task.PromptEn = GetPrompt(task.PromptEn, info);
+                                        task.PromptEn = await GetPrompt(task.PromptEn, info);
                                     }
 
                                     var submitAction = queue.ModalParam.Dto;
@@ -2879,7 +2879,7 @@ namespace Midjourney.Services
         /// <returns></returns>
         public async Task<Message> ImagineAsync(TaskInfo info, string prompt, string nonce)
         {
-            prompt = GetPrompt(prompt, info);
+            prompt = await GetPrompt(prompt, info);
 
             var json = (info.RealBotType ?? info.BotType) == EBotType.MID_JOURNEY ? _paramsMap["imagine"] : _paramsMap["imagineniji"];
             var paramsStr = ReplaceInteractionParams(json, nonce);
@@ -3081,7 +3081,7 @@ namespace Midjourney.Services
         public async Task<Message> ZoomAsync(TaskInfo info, string messageId, string customId, string prompt, string nonce)
         {
             customId = customId.Replace("MJ::CustomZoom::", "MJ::OutpaintCustomZoomModal::");
-            prompt = GetPrompt(prompt, info);
+            prompt = await GetPrompt(prompt, info);
 
             string paramsStr = ReplaceInteractionParams(_paramsMap["zoom"], nonce, info.RealBotType ?? info.BotType)
                 .Replace("$message_id", messageId);
@@ -3108,7 +3108,7 @@ namespace Midjourney.Services
         public async Task<Message> PicReaderAsync(TaskInfo info, string messageId, string customId, string prompt, string nonce, EBotType botType)
         {
             var index = customId.Split("::").LastOrDefault();
-            prompt = GetPrompt(prompt, info);
+            prompt = await GetPrompt(prompt, info);
 
             string paramsStr = ReplaceInteractionParams(_paramsMap["picreader"], nonce, botType)
                 .Replace("$message_id", messageId)
@@ -3134,7 +3134,7 @@ namespace Midjourney.Services
         /// <returns></returns>
         public async Task<Message> RemixAsync(TaskInfo info, TaskAction action, string messageId, string modal, string customId, string prompt, string nonce, EBotType botType)
         {
-            prompt = GetPrompt(prompt, info);
+            prompt = await GetPrompt(prompt, info);
 
             string paramsStr = ReplaceInteractionParams(_paramsMap["remix"], nonce, botType)
                 .Replace("$message_id", messageId)
@@ -3251,7 +3251,7 @@ namespace Midjourney.Services
         /// <param name="prompt"></param>
         /// <param name="info"></param>
         /// <returns></returns>
-        public string GetPrompt(string prompt, TaskInfo info)
+        public async Task<string> GetPrompt(string prompt, TaskInfo info)
         {
             var acc = Account;
 
@@ -3373,145 +3373,176 @@ namespace Midjourney.Services
             //// 处理转义字符引号等
             //return prompt.Replace("\\\"", "\"").Replace("\\'", "'").Replace("\\\\", "\\");
 
-            // 转官方链接
-            prompt = FormatUrls(prompt, info).ConfigureAwait(false).GetAwaiter().GetResult();
-
-            // 转全球加速地址
-            var storage = StorageHelper.Instance?.GetBaseStorage();
-            if (!string.IsNullOrWhiteSpace(storage?.GlobalCustomCdn))
-            {
-                // 使用正则提取所有的 url
-                var urls = Regex.Matches(prompt, @"(https?|ftp|file)://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]")
-                    .Select(c => c.Value).Distinct().ToList();
-                if (urls?.Count > 0)
-                {
-                    foreach (var url in urls)
-                    {
-                        var newUrl = url.ToGlobalCdn();
-                        if (newUrl != url)
-                        {
-                            prompt = prompt.Replace(url, newUrl);
-                        }
-                    }
-                }
-            }
+            // 转为云存储链接或悠船官方链接/全球加速链接
+            prompt = await ConvertPromptUrlsAsync(prompt, info);
 
             return prompt;
         }
 
         /// <summary>
-        /// 对 prompt 中含有 url 的进行转换为官方 url 处理
-        /// 同一个 url 1 小时内有效缓存
+        /// 对 prompt 中含有 url 的进行转换为云存储/官方链接/全球加速链接处理
+        /// 同一个 url 24 小时内有效缓存
         /// </summary>
         /// <param name="prompt"></param>
         /// <returns></returns>
-        public async Task<string> FormatUrls(string prompt, TaskInfo info)
+        public async Task<string> ConvertPromptUrlsAsync(string prompt, TaskInfo info)
         {
-            var setting = GlobalConfiguration.Setting;
-            if (!setting.EnableConvertOfficialLink)
-            {
-                return prompt;
-            }
-
             if (string.IsNullOrWhiteSpace(prompt))
             {
                 return prompt;
             }
 
-            // 使用正则提取所有的 url
-            var urls = Regex.Matches(prompt, @"(https?|ftp|file)://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]")
-                .Select(c => c.Value).Distinct().ToList();
+            var setting = GlobalConfiguration.Setting;
 
-            if (urls?.Count > 0)
+            // 未开启提示词链接转换保存到云存储
+            if (!setting.EnableConvertPromptLinkStorage)
             {
-                var urlDic = new Dictionary<string, string>();
-                foreach (var url in urls)
+                return prompt;
+            }
+
+            //// 未开启用户上传
+            //if (!GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
+            //{
+            //    return prompt;
+            //}
+
+            // 提取 prompt 中的 url，使用正则表达式提取
+            var urls = prompt.ExtractUrls();
+            if (urls == null || urls.Count == 0)
+            {
+                return prompt;
+            }
+
+            var urlDic = new Dictionary<string, string>();
+            foreach (var url in urls)
+            {
+                try
                 {
-                    try
+                    // 如果是悠船任务
+                    if (info.IsPartner)
                     {
-                        // 如果是悠船任务，并且链接包含悠船，则不处理
-                        if (info.IsPartner)
+                        // 开启悠船官方链接转换
+                        if (setting.EnableYouChuanPromptLink)
                         {
-                            if (url.Contains("youchuan"))
+                            // 已经是了悠船链接
+                            if (url.Contains("youchuan", StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
 
-                            // 未启用链接转换
-                            if (!setting.EnableYouChuanPromptLink)
+                            // 转为悠船官方链接，缓存默认 24 小时
+                            var ycOkUrl = await AdaptiveCache.GetOrCreateAsync($"fetchimg:yc_{url}", async () =>
                             {
-                                continue;
-                            }
-                        }
-
-                        // url 缓存默认 24 小时有效
-                        var okUrl = await AdaptiveCache.GetOrCreateAsync($"fetch:{url}", async () =>
-                        {
-                            //var ff = new MjImageFetchHelper();
-                            var res = await MjImageFetchHelper.FetchFileAsync(url);
-                            if (res.Success && !string.IsNullOrWhiteSpace(res.Url))
-                            {
-                                return res.Url;
-                            }
-                            else if (res.Success && res.FileBytes.Length > 0)
-                            {
-                                if (info.IsPartner)
+                                var res = await MjImageFetchHelper.FetchFileAsync(url);
+                                if (res.Success && !string.IsNullOrWhiteSpace(res.Url))
                                 {
-                                    // 悠船链接转换
-                                    var youchuanUrl = await _ymTaskService.UploadFile(info, res.FileBytes, res.FileName);
-                                    if (!string.IsNullOrWhiteSpace(youchuanUrl))
+                                    return res.Url;
+                                }
+                                else if (res.Success && res.FileBytes.Length > 0)
+                                {
+                                    var resUrl = await _ymTaskService.UploadFile(info, res.FileBytes, res.FileName);
+                                    if (!string.IsNullOrWhiteSpace(resUrl))
                                     {
-                                        return youchuanUrl;
+                                        return resUrl;
                                     }
                                     else
                                     {
                                         throw new LogicException(ReturnCode.FAILURE, "悠船链接转换失败");
                                     }
                                 }
-                                else
-                                {
-                                    // 上传到 Discord 服务器
-                                    var uploadResult = await UploadAsync(res.FileName, new DataUrl(res.ContentType, res.FileBytes));
-                                    if (uploadResult.Code != ReturnCode.SUCCESS)
-                                    {
-                                        throw new LogicException(uploadResult.Code, uploadResult.Description);
-                                    }
+                                throw new LogicException($"解析链接失败 {url}, {res?.Msg}");
+                            }, TimeSpan.FromDays(1));
 
-                                    if (uploadResult.Description.StartsWith("http"))
-                                    {
-                                        return uploadResult.Description;
-                                    }
-                                    else
-                                    {
-                                        var finalFileName = uploadResult.Description;
-                                        var sendImageResult = await SendImageMessageAsync("upload image: " + finalFileName, finalFileName);
-                                        if (sendImageResult.Code != ReturnCode.SUCCESS)
-                                        {
-                                            throw new LogicException(sendImageResult.Code, sendImageResult.Description);
-                                        }
+                            urlDic[url] = ycOkUrl;
 
-                                        return sendImageResult.Description;
-                                    }
-                                }
+                            continue;
+                        }
+                    }
+
+                    // 白名单判断
+                    if (MjImageFetchHelper.IsWhiteHost(url))
+                    {
+                        continue;
+                    }
+                    // 加速域名判断
+                    if (MjImageFetchHelper.IsCdnHost(url))
+                    {
+                        continue;
+                    }
+
+                    // 转为云存储链接，缓存默认 24 小时
+                    var okUrl = await AdaptiveCache.GetOrCreateAsync($"fetchimg:{url}", async () =>
+                    {
+                        var res = await MjImageFetchHelper.FetchFileAsync(url);
+                        if (res.Success && !string.IsNullOrWhiteSpace(res.Url))
+                        {
+                            return res.Url;
+                        }
+                        else if (res.Success && res.FileBytes.Length > 0)
+                        {
+                            var resUrl = await UploadToStorageAsync(res.FileName, res.ContentType, res.FileBytes);
+                            if (!string.IsNullOrWhiteSpace(resUrl))
+                            {
+                                return resUrl;
+                            }
+                            else
+                            {
+                                throw new LogicException(ReturnCode.FAILURE, "链接转换失败");
                             }
 
-                            throw new LogicException($"解析链接失败 {url}, {res?.Msg}");
-                        }, TimeSpan.FromDays(1));
+                            // 已废弃
+                            //// 上传到 Discord 服务器
+                            //var uploadResult = await UploadAsync(res.FileName, new DataUrl(res.ContentType, res.FileBytes));
+                            //if (uploadResult.Code != ReturnCode.SUCCESS)
+                            //{
+                            //    throw new LogicException(uploadResult.Code, uploadResult.Description);
+                            //}
 
-                        urlDic[url] = okUrl;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "解析 url 异常 {0}", url);
+                            //if (uploadResult.Description.StartsWith("http"))
+                            //{
+                            //    return uploadResult.Description;
+                            //}
+                            //else
+                            //{
+                            //    var finalFileName = uploadResult.Description;
+                            //    var sendImageResult = await SendImageMessageAsync("upload image: " + finalFileName, finalFileName);
+                            //    if (sendImageResult.Code != ReturnCode.SUCCESS)
+                            //    {
+                            //        throw new LogicException(sendImageResult.Code, sendImageResult.Description);
+                            //    }
 
-                        // 转换失败跳过
-                    }
+                            //    return sendImageResult.Description;
+                            //}
+                        }
+
+                        throw new LogicException($"解析链接失败 {url}, {res?.Msg}");
+                    }, TimeSpan.FromDays(1));
+
+                    urlDic[url] = okUrl;
                 }
-
-                // 替换 url
-                foreach (var item in urlDic)
+                catch (Exception ex)
                 {
-                    prompt = prompt.Replace(item.Key, item.Value);
+                    _logger.Warning(ex, "解析 url 异常 {0}", url);
+                }
+            }
+
+            // 替换 url
+            foreach (var item in urlDic)
+            {
+                prompt = prompt.Replace(item.Key, item.Value);
+            }
+
+            // 转全球加速地址
+            var storage = StorageHelper.Instance?.GetBaseStorage();
+            if (!string.IsNullOrWhiteSpace(storage?.GlobalCustomCdn))
+            {
+                foreach (var url in urls)
+                {
+                    var newUrl = url.ToGlobalCdn();
+                    if (newUrl != url)
+                    {
+                        prompt = prompt.Replace(url, newUrl);
+                    }
                 }
             }
 
@@ -3529,7 +3560,7 @@ namespace Midjourney.Services
         {
             try
             {
-                prompt = GetPrompt(prompt, info);
+                prompt = await GetPrompt(prompt, info);
 
                 customId = customId?.Replace("MJ::iframe::", "");
 
@@ -3637,7 +3668,7 @@ namespace Midjourney.Services
         /// <returns></returns>
         public async Task<Message> ShortenAsync(TaskInfo info, string prompt, string nonce, EBotType botType)
         {
-            prompt = GetPrompt(prompt, info);
+            prompt = await GetPrompt(prompt, info);
 
             var json = botType == EBotType.MID_JOURNEY || prompt.Contains("--niji") ? _paramsMap["shorten"] : _paramsMap["shortenniji"];
             var paramsStr = ReplaceInteractionParams(json, nonce);
@@ -3720,80 +3751,102 @@ namespace Midjourney.Services
         }
 
         /// <summary>
-        /// 上传文件到 Discord 或 文件存储
+        /// 上传文件到文件存储
         /// </summary>
         /// <param name="fileName"></param>
         /// <param name="dataUrl"></param>
         /// <param name="useDiscordUpload"></param>
         /// <returns></returns>
-        public async Task<Message> UploadAsync(string fileName, DataUrl dataUrl, bool useDiscordUpload = false)
+        public async Task<Message> UploadAsync(string fileName, DataUrl dataUrl)
         {
-            // 保存用户上传的 base64 到文件存储
-            if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64 && !useDiscordUpload)
+            try
             {
-                try
-                {
-                    var localPath = $"attachments/{DateTime.Now:yyyyMMdd}/{fileName}";
-
-                    var mm = MimeTypeHelper.GetMimeType(Path.GetFileName(localPath), "image/png");
-
-                    var stream = new MemoryStream(dataUrl.Data);
-                    var res = StorageHelper.Instance?.SaveAsync(stream, localPath, dataUrl.MimeType ?? mm);
-                    if (string.IsNullOrWhiteSpace(res?.Url))
-                    {
-                        throw new Exception("上传图片到加速站点失败");
-                    }
-
-                    var url = res.Url;
-
-                    return Message.Success(url);
-                }
-                catch (Exception e)
-                {
-                    _logger.Error(e, "上传图片到加速站点异常");
-
-                    return Message.Of(ReturnCode.FAILURE, "上传图片到加速站点异常");
-                }
+                var url = await UploadToStorageAsync(fileName, dataUrl.MimeType, dataUrl.Data);
+                return Message.Success(url);
             }
-            else
+            catch (Exception ex)
             {
-                try
-                {
-                    JObject fileObj = new JObject
-                    {
-                        ["filename"] = fileName,
-                        ["file_size"] = dataUrl.Data.Length,
-                        ["id"] = "0"
-                    };
-                    JObject paramsJson = new JObject
-                    {
-                        ["files"] = new JArray { fileObj }
-                    };
-                    HttpResponseMessage response = await PostJsonAsync(_discordAttachmentUrl, paramsJson.ToString());
-                    if (response.StatusCode != System.Net.HttpStatusCode.OK)
-                    {
-                        _logger.Error("上传图片到discord失败, status: {StatusCode}, msg: {Body}", response.StatusCode, await response.Content.ReadAsStringAsync());
-                        return Message.Of(ReturnCode.VALIDATION_ERROR, "上传图片到discord失败");
-                    }
-                    JArray array = JObject.Parse(await response.Content.ReadAsStringAsync())["attachments"] as JArray;
-                    if (array == null || array.Count == 0)
-                    {
-                        return Message.Of(ReturnCode.VALIDATION_ERROR, "上传图片到discord失败");
-                    }
-                    string uploadUrl = array[0]["upload_url"].ToString();
-                    string uploadFilename = array[0]["upload_filename"].ToString();
+                _logger.Warning(ex, "上传图片到云存储异常");
 
-                    await PutFileAsync(uploadUrl, dataUrl);
-
-                    return Message.Success(uploadFilename);
-                }
-                catch (Exception e)
-                {
-                    _logger.Error(e, "上传图片到discord失败");
-
-                    return Message.Of(ReturnCode.FAILURE, "上传图片到discord失败");
-                }
+                return Message.Of(ReturnCode.FAILURE, "上传图片到云存储异常");
             }
+
+            //// 保存用户上传的 base64 到文件存储
+            //if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
+            //{
+            //    try
+            //    {
+            //        var url = await UploadToStorageAsync(fileName, dataUrl.MimeType, dataUrl.Data);
+            //        return Message.Success(url);
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        _logger.Warning(ex, "上传图片到加速站点异常");
+            //        return Message.Of(ReturnCode.FAILURE, "上传图片到加速站点异常");
+            //    }
+            //}
+
+            return Message.Of(ReturnCode.VALIDATION_ERROR, "上传图片失败，未启用用户上传功能");
+
+            //// 已废弃，禁止上传到 Discord 服务器，改为直接上传到文件存储，并返回链接
+            //try
+            //{
+            //    JObject fileObj = new JObject
+            //    {
+            //        ["filename"] = fileName,
+            //        ["file_size"] = dataUrl.Data.Length,
+            //        ["id"] = "0"
+            //    };
+            //    JObject paramsJson = new JObject
+            //    {
+            //        ["files"] = new JArray { fileObj }
+            //    };
+            //    HttpResponseMessage response = await PostJsonAsync(_discordAttachmentUrl, paramsJson.ToString());
+            //    if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            //    {
+            //        _logger.Error("上传图片到discord失败, status: {StatusCode}, msg: {Body}", response.StatusCode, await response.Content.ReadAsStringAsync());
+            //        return Message.Of(ReturnCode.VALIDATION_ERROR, "上传图片到discord失败");
+            //    }
+            //    JArray array = JObject.Parse(await response.Content.ReadAsStringAsync())["attachments"] as JArray;
+            //    if (array == null || array.Count == 0)
+            //    {
+            //        return Message.Of(ReturnCode.VALIDATION_ERROR, "上传图片到discord失败");
+            //    }
+            //    string uploadUrl = array[0]["upload_url"].ToString();
+            //    string uploadFilename = array[0]["upload_filename"].ToString();
+
+            //    await PutFileAsync(uploadUrl, dataUrl);
+
+            //    return Message.Success(uploadFilename);
+            //}
+            //catch (Exception e)
+            //{
+            //    _logger.Error(e, "上传图片到discord失败");
+
+            //    return Message.Of(ReturnCode.FAILURE, "上传图片到discord失败");
+            //}
+        }
+
+        /// <summary>
+        /// 上传到云存储，返回可访问的链接，如果上传失败会抛出异常
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="contentType"></param>
+        /// <param name="fileBytes"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private async Task<string> UploadToStorageAsync(string fileName, string contentType, byte[] fileBytes)
+        {
+            var localPath = $"attachments/{DateTime.Now:yyyyMMdd}/{fileName}";
+            var mm = MimeTypeHelper.GetMimeType(Path.GetFileName(localPath), "image/png");
+            var stream = new MemoryStream(fileBytes);
+            var res = StorageHelper.Instance?.SaveAsync(stream, localPath, contentType ?? mm);
+            if (string.IsNullOrWhiteSpace(res?.Url))
+            {
+                Log.Warning("上传图片到加速站点失败, localPath: {@0}, contentType: {@1}", localPath, contentType);
+                throw new LogicException("上传图片到加速站点失败");
+            }
+            return res.Url;
         }
 
         public async Task<Message> SendImageMessageAsync(string content, string finalFileName)

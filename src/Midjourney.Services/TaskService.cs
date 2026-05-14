@@ -619,20 +619,22 @@ namespace Midjourney.Services
                         return SubmitResultVO.Fail(ReturnCode.FAILURE, uploadResult.Description);
                     }
 
-                    if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
-                    {
-                        startImageUrl = uploadResult.Description;
-                    }
-                    else
-                    {
-                        var finalFileName = uploadResult.Description;
-                        var sendImageResult = await instance.SendImageMessageAsync(("upload image: " + finalFileName), finalFileName);
-                        if (sendImageResult.Code != ReturnCode.SUCCESS)
-                        {
-                            return SubmitResultVO.Fail(sendImageResult.Code, sendImageResult.Description);
-                        }
-                        startImageUrl = sendImageResult.Description;
-                    }
+                    startImageUrl = uploadResult.Description;
+
+                    //if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
+                    //{
+                    //    startImageUrl = uploadResult.Description;
+                    //}
+                    //else
+                    //{
+                    //    var finalFileName = uploadResult.Description;
+                    //    var sendImageResult = await instance.SendImageMessageAsync(("upload image: " + finalFileName), finalFileName);
+                    //    if (sendImageResult.Code != ReturnCode.SUCCESS)
+                    //    {
+                    //        return SubmitResultVO.Fail(sendImageResult.Code, sendImageResult.Description);
+                    //    }
+                    //    startImageUrl = sendImageResult.Description;
+                    //}
                 }
 
                 // 结束图片
@@ -648,20 +650,23 @@ namespace Midjourney.Services
                     {
                         return SubmitResultVO.Fail(ReturnCode.FAILURE, uploadResult.Description);
                     }
-                    if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
-                    {
-                        endImageUrl = uploadResult.Description;
-                    }
-                    else
-                    {
-                        var finalFileName = uploadResult.Description;
-                        var sendImageResult = await instance.SendImageMessageAsync(("upload image: " + finalFileName), finalFileName);
-                        if (sendImageResult.Code != ReturnCode.SUCCESS)
-                        {
-                            return SubmitResultVO.Fail(sendImageResult.Code, sendImageResult.Description);
-                        }
-                        endImageUrl = sendImageResult.Description;
-                    }
+
+                    endImageUrl = uploadResult.Description;
+
+                    //if (GlobalConfiguration.Setting.EnableSaveUserUploadBase64)
+                    //{
+                    //    endImageUrl = uploadResult.Description;
+                    //}
+                    //else
+                    //{
+                    //    var finalFileName = uploadResult.Description;
+                    //    var sendImageResult = await instance.SendImageMessageAsync(("upload image: " + finalFileName), finalFileName);
+                    //    if (sendImageResult.Code != ReturnCode.SUCCESS)
+                    //    {
+                    //        return SubmitResultVO.Fail(sendImageResult.Code, sendImageResult.Description);
+                    //    }
+                    //    endImageUrl = sendImageResult.Description;
+                    //}
                 }
 
                 if (!string.IsNullOrWhiteSpace(startImageUrl))
@@ -926,16 +931,15 @@ namespace Midjourney.Services
                 // 是否转换链接
                 link = dataUrl.Url;
 
-                // 如果转换用户链接到文件存储
-                if (GlobalConfiguration.Setting.EnableSaveUserUploadLink)
-                {
-                    //var ff = new MjImageFetchHelper();
-                    var url = await MjImageFetchHelper.FetchFileToStorageAsync(link);
-                    if (!string.IsNullOrWhiteSpace(url))
-                    {
-                        link = url;
-                    }
-                }
+                //// 如果转换用户链接到文件存储
+                //if (GlobalConfiguration.Setting.EnableSaveUserUploadLink)
+                //{
+                //    var url = await MjImageFetchHelper.FetchFileToStorageAsync(link);
+                //    if (!string.IsNullOrWhiteSpace(url))
+                //    {
+                //        link = url;
+                //    }
+                //}
             }
             else
             {

@@ -123,14 +123,36 @@ namespace Midjourney.Base.Models
             // v7_2x_creative
             // v7_2x_subtle
 
+            // --v 8.1
+            // v8r1_2x_subtle
+            // v8r1_2x_creative
+
+            // --v 8.2
+            // v8r2_2x_subtle
+            // v8r2_2x_creative
+
             var button1Type = "";
             var bytton2Type = "";
             var label1 = "";
             var label2 = "";
 
-            if (version.StartsWith("v 8"))
+            if (version.StartsWith("v 8.2"))
             {
-                // v 8 版本移除了 Upscale 高清功能
+                button1Type = "v8r2_2x_subtle";
+                bytton2Type = "v8r2_2x_creative";
+                label1 = "Upscale (Subtle)";
+                label2 = "Upscale (Creative)";
+            }
+            else if (version.StartsWith("v 8.1"))
+            {
+                button1Type = "v8r1_2x_subtle";
+                bytton2Type = "v8r1_2x_creative";
+                label1 = "Upscale (Subtle)";
+                label2 = "Upscale (Creative)";
+            }
+            else if (version.StartsWith("v 8"))
+            {
+                // v 8.0 版本移除了 Upscale 高清功能
                 return null;
             }
             else if (version.StartsWith("v 7") || version.StartsWith("niji 7"))
@@ -325,9 +347,10 @@ namespace Midjourney.Base.Models
             if (string.IsNullOrWhiteSpace(versionNumber)
                 || !double.TryParse(versionNumber, out double v)
                 || v < 5
-                || v >= 8)
+                || v == 8)
             {
-                // v8 版本移除了 Zoom 功能，需要在 edit 中实现缩放功能
+                // v8.0 版本移除了 Zoom 功能，需要在 edit 中实现缩放功能
+                // v8.1 / v8.2 已恢复支持 Zoom 功能
                 return null;
             }
 
@@ -375,9 +398,10 @@ namespace Midjourney.Base.Models
             if (string.IsNullOrWhiteSpace(versionNumber)
                 || !double.TryParse(versionNumber, out double v)
                 || v < 5
-                || v >= 8)
+                || v == 8)
             {
-                // v8 版本移除了 Pan 功能，需要在 edit 中实现平移功能
+                // v8.0 版本移除了 Pan 功能，需要在 edit 中实现平移功能
+                // v8.1 / v8.2 已恢复支持 Pan 功能
                 return null;
             }
 

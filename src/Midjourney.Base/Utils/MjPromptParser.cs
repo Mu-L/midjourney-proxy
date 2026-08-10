@@ -58,7 +58,7 @@ namespace Midjourney.Base.Util
         /// <summary>
         /// 默认 MJ 版本
         /// </summary>
-        public const string DEFALUT_MJ_VERSION = "8.1";
+        public const string DEFALUT_MJ_VERSION = "8.2";
 
         /// <summary>
         /// 默认 NIJI 版本
@@ -246,8 +246,8 @@ namespace Midjourney.Base.Util
                 ShortName = "v",
                 Description = "模型版本",
                 DescriptionEn = "Midjourney model version",
-                ValueRange = "1, 2, 3, 4, 5, 5.1, 5.2, 6, 6.1, 7, 8.1",
-                DefaultValue = "8.1",
+                ValueRange = "1, 2, 3, 4, 5, 5.1, 5.2, 6, 6.1, 7, 8.1, 8.2",
+                DefaultValue = "8.2",
                 SupportedVersions = "All"
             },
             ["niji"] = new()

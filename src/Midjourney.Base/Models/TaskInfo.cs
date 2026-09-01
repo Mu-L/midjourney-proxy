@@ -1079,6 +1079,13 @@ namespace Midjourney.Base.Models
 
             var version = GetVersion(prompt);
 
+            // 高清按钮
+            var upscaleButtons = CustomComponentModel.CreateUpscaleButtons(this, id, index, version);
+            if (upscaleButtons?.Count > 0)
+            {
+                Buttons.AddRange(upscaleButtons);
+            }
+
             // 变化按钮
             var varyButtons = CustomComponentModel.CreateVaryButtons(id, index, version);
             if (varyButtons?.Count > 0)
@@ -1091,6 +1098,13 @@ namespace Midjourney.Base.Models
             if (zoomButtons?.Count > 0)
             {
                 Buttons.AddRange(zoomButtons);
+            }
+
+            // 延展按钮
+            var panButtons = CustomComponentModel.CreatePanButtons(id, index, version);
+            if (panButtons?.Count > 0)
+            {
+                Buttons.AddRange(panButtons);
             }
 
             // 视频按钮

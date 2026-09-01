@@ -204,6 +204,12 @@ namespace Midjourney.Base.Models
         public bool EnableYouChuanPromptLink { get; set; }
 
         /// <summary>
+        /// 悠船图生文时将图片地址转换为悠船自己的 CDN 链接
+        /// 默认开启，即图片地址默认使用悠船自己的 CDN
+        /// </summary>
+        public bool EnableYouChuanDescribeLink { get; set; } = false;
+
+        /// <summary>
         /// 开启视频生成功能
         /// </summary>
         public bool EnableVideo { get; set; } = true;
